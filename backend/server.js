@@ -25,10 +25,12 @@ app.get("/", (req, res) => {
 // Import routes
 const tripRoutes = require("./routes/tripRoutes");
 const destinationRoutes = require("./routes/destinationRoutes");
+const chatRoutes = require("./routes/chatRoutes");
 
 // Use routes
 app.use("/api/trips", tripRoutes);
 app.use("/api/destinations", destinationRoutes);
+app.use("/api/chat", chatRoutes);
 
 // MongoDB connect (non-blocking with fallback)
 mongoose.connect(process.env.MONGO_URI, {

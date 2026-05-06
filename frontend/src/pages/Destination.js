@@ -12,6 +12,13 @@ function Destination() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatUser, setChatUser] = useState(null);
+  const [myUsername, setMyUsername] = useState(localStorage.getItem("soloTravelerName") || "");
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState("");
+
   useEffect(() => {
     setLoading(true);
     setNotFound(false);
@@ -29,6 +36,54 @@ function Destination() {
       setLoading(false);
     });
   }, [name]);
+
+  // Polling for messages
+  useEffect(() => {
+    let interval;
+    if (chatOpen && chatUser && myUsername) {
+      const fetchMessages = () => {
+        axios.get(`${API}/api/chat/${myUsername}/${chatUser}`)
+          .then(res => setMessages(res.data))
+          .catch(err => console.error("Error fetching messages:", err));
+      };
+      
+      fetchMessages(); // initial fetch
+      interval = setInterval(fetchMessages, 3000); // poll every 3 seconds
+    }
+    return () => clearInterval(interval);
+  }, [chatOpen, chatUser, myUsername]);
+
+  const openChat = (user) => {
+    setChatUser(user);
+    setChatOpen(true);
+  };
+
+  const closeChat = () => {
+    setChatOpen(false);
+    setChatUser(null);
+    setMessages([]);
+  };
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !myUsername.trim()) return;
+
+    localStorage.setItem("soloTravelerName", myUsername);
+
+    const msgData = {
+      senderId: myUsername,
+      receiverId: chatUser,
+      content: newMessage
+    };
+
+    try {
+      const res = await axios.post(`${API}/api/chat/send`, msgData);
+      setMessages([...messages, res.data]);
+      setNewMessage("");
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
+  };
 
   const getInitials = (name) => {
     return name
@@ -226,6 +281,9 @@ function Destination() {
                 {trip.notes && (
                   <div className="traveler-notes">{trip.notes}</div>
                 )}
+                <button className="chat-btn" onClick={() => openChat(trip.userId)}>
+                  💬 Chat with {trip.userId}
+                </button>
               </div>
             ))}
           </div>
@@ -242,6 +300,57 @@ function Destination() {
       <footer className="footer">
         <p>© 2026 SoloTravel — Built for adventurers who explore alone, together.</p>
       </footer>
+
+      {/* Chat Modal */}
+      {chatOpen && (
+        <div className="chat-overlay">
+          <div className="chat-modal">
+            <div className="chat-header">
+              <h3>Chat with {chatUser}</h3>
+              <button className="close-btn" onClick={closeChat}>✖</button>
+            </div>
+            
+            <div className="chat-setup">
+              <input 
+                type="text" 
+                placeholder="Enter your name to chat..." 
+                value={myUsername}
+                onChange={(e) => setMyUsername(e.target.value)}
+                className="name-input"
+              />
+            </div>
+
+            <div className="chat-messages">
+              {messages.length === 0 ? (
+                <p className="no-messages">No messages yet. Say hi!</p>
+              ) : (
+                messages.map((msg, idx) => {
+                  const isMine = msg.senderId.toLowerCase() === myUsername.toLowerCase();
+                  return (
+                    <div key={idx} className={`message ${isMine ? 'sent' : 'received'}`}>
+                      <div className="message-content">{msg.content}</div>
+                      <div className="message-time">
+                        {new Date(msg.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <form className="chat-input-area" onSubmit={sendMessage}>
+              <input 
+                type="text"
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                disabled={!myUsername.trim()}
+              />
+              <button type="submit" disabled={!newMessage.trim() || !myUsername.trim()}>Send</button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
