@@ -1,13 +1,14 @@
 const express = require("express");
 const router = express.Router();
-const Destination = require("../models/Destination");
+const prisma = require("../lib/prisma");
 const { destinations } = require("../data/sampleData");
 
 // Get all destinations (names only)
 router.get("/", async (req, res) => {
   try {
-    // Try MongoDB first
-    const dbData = await Destination.find().maxTimeMS(3000);
+    const dbData = await prisma.destination.findMany({
+      orderBy: { name: "asc" },
+    });
     if (dbData && dbData.length > 0) {
       return res.json(dbData);
     }
@@ -25,10 +26,11 @@ router.get("/:name", async (req, res) => {
   const name = req.params.name.toLowerCase();
 
   try {
-    // Try MongoDB first
-    const dbData = await Destination.findOne({
-      name: new RegExp(`^${name}$`, "i"),
-    }).maxTimeMS(3000);
+    const dbData = await prisma.destination.findFirst({
+      where: {
+        name: { equals: name, mode: "insensitive" },
+      },
+    });
 
     if (dbData) {
       return res.json(dbData);

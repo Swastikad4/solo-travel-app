@@ -1,0 +1,54 @@
+// SoloTravel PostgreSQL Schema
+// Run `npx prisma migrate dev --name init` after configuring DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Destination {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  image        String?
+  description  String?
+  famousPlaces String[]
+  thingsToDo   String[]
+  bestTime     String?
+  safetyRating Float?
+  soloScore    Float?
+  avgBudget    String?
+  language     String?
+  currency     String?
+  createdAt    DateTime @default(now())
+}
+
+model Trip {
+  id          String   @id @default(uuid())
+  userId      String
+  destination String
+  startDate   DateTime
+  endDate     DateTime
+  notes       String?
+  createdAt   DateTime @default(now())
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  timestamp  DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  interests String[]
+  createdAt DateTime @default(now())
+}

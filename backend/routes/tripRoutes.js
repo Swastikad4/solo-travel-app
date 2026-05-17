@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const Trip = require("../models/Trip");
+const prisma = require("../lib/prisma");
 const { sampleTrips } = require("../data/sampleData");
 
 // ===== VALIDATION HELPER =====
@@ -38,17 +38,16 @@ router.post("/add", async (req, res) => {
   const tripData = {
     userId: req.body.userId.trim(),
     destination: req.body.destination.trim(),
-    startDate: req.body.startDate,
-    endDate: req.body.endDate,
+    startDate: new Date(req.body.startDate),
+    endDate: new Date(req.body.endDate),
     notes: req.body.notes ? req.body.notes.trim().slice(0, 500) : "",
   };
 
   try {
-    const trip = new Trip(tripData);
-    await trip.save();
+    const trip = await prisma.trip.create({ data: tripData });
     return res.status(201).json(trip);
   } catch (err) {
-    // If MongoDB fails, store in memory as fallback
+    // If PostgreSQL fails, store in memory as fallback
     const name = tripData.destination.toLowerCase();
     const newTrip = { _id: "t" + Date.now(), ...tripData };
     if (!sampleTrips[name]) sampleTrips[name] = [];
@@ -60,7 +59,9 @@ router.post("/add", async (req, res) => {
 // Get all trips
 router.get("/", async (req, res) => {
   try {
-    const dbTrips = await Trip.find().sort({ createdAt: -1 }).maxTimeMS(3000);
+    const dbTrips = await prisma.trip.findMany({
+      orderBy: { createdAt: "desc" },
+    });
     if (dbTrips && dbTrips.length > 0) return res.json(dbTrips);
   } catch (err) {
     // Fall through to sample data
@@ -75,11 +76,12 @@ router.get("/:destination", async (req, res) => {
   if (!dest) return res.status(400).json({ error: "destination is required" });
 
   try {
-    const dbTrips = await Trip.find({
-      destination: new RegExp(`^${dest}$`, "i"),
-    })
-      .sort({ startDate: 1 })
-      .maxTimeMS(3000);
+    const dbTrips = await prisma.trip.findMany({
+      where: {
+        destination: { equals: dest, mode: "insensitive" },
+      },
+      orderBy: { startDate: "asc" },
+    });
     if (dbTrips && dbTrips.length > 0) return res.json(dbTrips);
   } catch (err) {
     // Fall through

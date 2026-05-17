@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const Message = require("../models/Message");
+const prisma = require("../lib/prisma");
 
-// In-memory fallback for messages if MongoDB is unavailable
+// In-memory fallback for messages if PostgreSQL is unavailable
 const sampleMessages = [];
 
 // ===== VALIDATION HELPER =====
@@ -38,21 +38,22 @@ router.get("/:user1/:user2", async (req, res) => {
     return res.status(400).json({ error: "Both user IDs are required" });
 
   try {
-    const dbMessages = await Message.find({
-      $or: [
-        {
-          senderId: new RegExp(`^${u1}$`, "i"),
-          receiverId: new RegExp(`^${u2}$`, "i"),
-        },
-        {
-          senderId: new RegExp(`^${u2}$`, "i"),
-          receiverId: new RegExp(`^${u1}$`, "i"),
-        },
-      ],
-    })
-      .sort({ timestamp: 1 })
-      .limit(200)
-      .maxTimeMS(3000);
+    const dbMessages = await prisma.message.findMany({
+      where: {
+        OR: [
+          {
+            senderId: { equals: u1, mode: "insensitive" },
+            receiverId: { equals: u2, mode: "insensitive" },
+          },
+          {
+            senderId: { equals: u2, mode: "insensitive" },
+            receiverId: { equals: u1, mode: "insensitive" },
+          },
+        ],
+      },
+      orderBy: { timestamp: "asc" },
+      take: 200,
+    });
 
     if (dbMessages && dbMessages.length > 0) return res.json(dbMessages);
   } catch (err) {
@@ -82,11 +83,10 @@ router.post("/send", async (req, res) => {
   };
 
   try {
-    const message = new Message(newMsgData);
-    await message.save();
+    const message = await prisma.message.create({ data: newMsgData });
     return res.status(201).json(message);
   } catch (err) {
-    // If MongoDB fails, store in memory
+    // If PostgreSQL fails, store in memory
     const newMsg = { _id: "m" + Date.now(), ...newMsgData };
     sampleMessages.push(newMsg);
     return res.status(201).json(newMsg);
