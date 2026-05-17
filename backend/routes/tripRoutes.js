@@ -3,60 +3,88 @@ const router = express.Router();
 const Trip = require("../models/Trip");
 const { sampleTrips } = require("../data/sampleData");
 
+// ===== VALIDATION HELPER =====
+const validateTrip = (body) => {
+  const errors = [];
+  const { userId, destination, startDate, endDate } = body;
+
+  if (!userId || typeof userId !== "string" || !userId.trim())
+    errors.push("userId is required");
+  if (!destination || typeof destination !== "string" || !destination.trim())
+    errors.push("destination is required");
+  if (!startDate) errors.push("startDate is required");
+  if (!endDate) errors.push("endDate is required");
+
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (isNaN(start.getTime())) errors.push("startDate is not a valid date");
+    if (isNaN(end.getTime())) errors.push("endDate is not a valid date");
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && end < start)
+      errors.push("endDate must be on or after startDate");
+  }
+
+  return errors;
+};
+
 // Add trip
 router.post("/add", async (req, res) => {
+  const errors = validateTrip(req.body);
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors.join("; ") });
+  }
+
+  // Sanitize
+  const tripData = {
+    userId: req.body.userId.trim(),
+    destination: req.body.destination.trim(),
+    startDate: req.body.startDate,
+    endDate: req.body.endDate,
+    notes: req.body.notes ? req.body.notes.trim().slice(0, 500) : "",
+  };
+
   try {
-    const trip = new Trip(req.body);
+    const trip = new Trip(tripData);
     await trip.save();
-    res.json(trip);
+    return res.status(201).json(trip);
   } catch (err) {
-    // If MongoDB fails, store in memory
-    const name = req.body.destination?.toLowerCase();
-    const newTrip = {
-      _id: "t" + Date.now(),
-      ...req.body,
-    };
-    if (!sampleTrips[name]) {
-      sampleTrips[name] = [];
-    }
+    // If MongoDB fails, store in memory as fallback
+    const name = tripData.destination.toLowerCase();
+    const newTrip = { _id: "t" + Date.now(), ...tripData };
+    if (!sampleTrips[name]) sampleTrips[name] = [];
     sampleTrips[name].push(newTrip);
-    res.json(newTrip);
+    return res.status(201).json(newTrip);
   }
 });
 
 // Get all trips
 router.get("/", async (req, res) => {
   try {
-    const dbTrips = await Trip.find().maxTimeMS(3000);
-    if (dbTrips && dbTrips.length > 0) {
-      return res.json(dbTrips);
-    }
+    const dbTrips = await Trip.find().sort({ createdAt: -1 }).maxTimeMS(3000);
+    if (dbTrips && dbTrips.length > 0) return res.json(dbTrips);
   } catch (err) {
-    // Fall through
+    // Fall through to sample data
   }
-
-  // Return all sample trips flattened
   const allTrips = Object.values(sampleTrips).flat();
   res.json(allTrips);
 });
 
 // Get trips by destination
 router.get("/:destination", async (req, res) => {
-  const dest = req.params.destination.toLowerCase();
+  const dest = req.params.destination.trim().toLowerCase();
+  if (!dest) return res.status(400).json({ error: "destination is required" });
 
   try {
     const dbTrips = await Trip.find({
       destination: new RegExp(`^${dest}$`, "i"),
-    }).maxTimeMS(3000);
-
-    if (dbTrips && dbTrips.length > 0) {
-      return res.json(dbTrips);
-    }
+    })
+      .sort({ startDate: 1 })
+      .maxTimeMS(3000);
+    if (dbTrips && dbTrips.length > 0) return res.json(dbTrips);
   } catch (err) {
     // Fall through
   }
 
-  // Return sample trips
   const trips = sampleTrips[dest] || [];
   res.json(trips);
 });
