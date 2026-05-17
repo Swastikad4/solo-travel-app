@@ -3,6 +3,7 @@ import "./App.css";
 import Home from "./pages/Home";
 import Destination from "./pages/Destination";
 import PlanTrip from "./pages/PlanTrip";
+import NotFound from "./pages/NotFound";
 
 function App() {
   return (
@@ -11,6 +12,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/destination/:name" element={<Destination />} />
         <Route path="/plan" element={<PlanTrip />} />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </BrowserRouter>
   );
